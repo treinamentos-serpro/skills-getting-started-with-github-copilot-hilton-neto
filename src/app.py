@@ -10,9 +10,11 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
 import os
 from pathlib import Path
+from threading import Lock
 
 app = FastAPI(title="Mergington High School API",
               description="API for viewing and signing up for extracurricular activities")
+activity_lock = Lock()
 
 # Mount the static files directory
 current_dir = Path(__file__).parent
@@ -98,12 +100,13 @@ def signup_for_activity(activity_name: str, email: str):
     # Get the specific activity
     activity = activities[activity_name]
 
-    # Validate student is not already signed up
-    if email in activity["participants"]:
-        raise HTTPException(status_code=400, detail="Student already signed up for this activity")
+    with activity_lock:
+        # Validate student is not already signed up
+        if email in activity["participants"]:
+            raise HTTPException(status_code=400, detail="Student already signed up for this activity")
 
-    # Add student
-    activity["participants"].append(email)
+        # Add student
+        activity["participants"].append(email)
     return {"message": f"Signed up {email} for {activity_name}"}
 
 
@@ -114,8 +117,9 @@ def remove_signup(activity_name: str, email: str):
         raise HTTPException(status_code=404, detail="Activity not found")
 
     activity = activities[activity_name]
-    if email not in activity["participants"]:
-        raise HTTPException(status_code=404, detail="Student is not signed up for this activity")
+    with activity_lock:
+        if email not in activity["participants"]:
+            raise HTTPException(status_code=404, detail="Student is not signed up for this activity")
 
-    activity["participants"].remove(email)
+        activity["participants"].remove(email)
     return {"message": f"Removed {email} from {activity_name}"}

@@ -1,3 +1,6 @@
+from concurrent.futures import ThreadPoolExecutor
+
+
 def test_get_activities_returns_activity_details(client):
     response = client.get("/activities")
 
@@ -36,6 +39,20 @@ def test_signup_rejects_duplicate_participant(client):
     assert participants.count(email) == 1
 
 
+def test_concurrent_signup_rejects_duplicate_participant(client):
+    email = "concurrent-student@mergington.edu"
+    url = "/activities/Basketball Club/signup"
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        responses = list(
+            executor.map(lambda _: client.post(url, params={"email": email}), range(2))
+        )
+
+    assert sorted(response.status_code for response in responses) == [200, 400]
+    participants = client.get("/activities").json()["Basketball Club"]["participants"]
+    assert participants.count(email) == 1
+
+
 def test_signup_returns_404_for_unknown_activity(client):
     response = client.post(
         "/activities/Unknown Club/signup",
@@ -64,6 +81,19 @@ def test_delete_signup_returns_404_for_unregistered_email(client):
     )
 
     assert response.status_code == 404
+
+
+def test_concurrent_delete_returns_404_after_first_removal(client):
+    email = "concurrent-student@mergington.edu"
+    url = "/activities/Basketball Club/signup"
+    client.post(url, params={"email": email})
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        responses = list(
+            executor.map(lambda _: client.delete(url, params={"email": email}), range(2))
+        )
+
+    assert sorted(response.status_code for response in responses) == [200, 404]
 
 
 def test_delete_signup_returns_404_for_unknown_activity(client):

@@ -5,10 +5,13 @@ document.addEventListener("DOMContentLoaded", () => {
   const messageDiv = document.getElementById("message");
 
   // Function to fetch activities from API
-  async function fetchActivities() {
+  async function fetchActivities(focusAfterRefresh = null) {
     try {
       const response = await fetch("/activities");
       const activities = await response.json();
+      const selectedActivity = activitySelect.value;
+      const shouldRestoreFocus =
+        focusAfterRefresh && document.activeElement === focusAfterRefresh.button;
 
       activitiesList.replaceChildren();
       while (activitySelect.options.length > 1) {
@@ -19,6 +22,7 @@ document.addEventListener("DOMContentLoaded", () => {
       Object.entries(activities).forEach(([name, details]) => {
         const activityCard = document.createElement("div");
         activityCard.className = "activity-card";
+        activityCard.dataset.activityName = name;
 
         const spotsLeft = details.max_participants - details.participants.length;
 
@@ -69,6 +73,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
           removeButton.addEventListener("click", async () => {
             removeButton.disabled = true;
+            const participantButtons = Array.from(
+              removeButton.closest(".participants-list").querySelectorAll(".participant-remove")
+            );
+            const buttonIndex = participantButtons.indexOf(removeButton);
             try {
               const response = await fetch(
                 `/activities/${encodeURIComponent(name)}/signup?email=${encodeURIComponent(email)}`,
@@ -83,7 +91,7 @@ document.addEventListener("DOMContentLoaded", () => {
               messageDiv.textContent = result.message;
               messageDiv.className = "success";
               messageDiv.classList.remove("hidden");
-              await fetchActivities();
+              await fetchActivities({ button: removeButton, activityName: name, buttonIndex });
             } catch (error) {
               messageDiv.textContent = error.message || "Unable to remove participant. Please try again.";
               messageDiv.className = "error";
@@ -118,6 +126,23 @@ document.addEventListener("DOMContentLoaded", () => {
         option.textContent = name;
         activitySelect.appendChild(option);
       });
+
+      if (Array.from(activitySelect.options).some((option) => option.value === selectedActivity)) {
+        activitySelect.value = selectedActivity;
+      }
+
+      if (shouldRestoreFocus) {
+        const activityCard = Array.from(activitiesList.children).find(
+          (card) => card.dataset.activityName === focusAfterRefresh.activityName
+        );
+        const removeButtons = activityCard
+          ? Array.from(activityCard.querySelectorAll(".participant-remove"))
+          : [];
+        const nextButton = removeButtons[
+          Math.min(focusAfterRefresh.buttonIndex, removeButtons.length - 1)
+        ];
+        (nextButton || activitySelect).focus();
+      }
     } catch (error) {
       activitiesList.innerHTML = "<p>Failed to load activities. Please try again later.</p>";
       console.error("Error fetching activities:", error);
